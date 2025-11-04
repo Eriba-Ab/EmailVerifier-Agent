@@ -75,7 +75,7 @@ const analyzeVerification = createStep({
   execute: async ({ inputData, mastra }) => {
     if (!inputData) throw new Error("Verification data not found");
 
-    const agent = mastra?.getAgent("mailverifier Agent");
+    const agent = mastra?.getAgent("mailverifierAgent");
     if (!agent) throw new Error("Mail Verifier Agent not found");
 
     const prompt = `
