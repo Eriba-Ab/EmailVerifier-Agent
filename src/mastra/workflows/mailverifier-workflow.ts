@@ -9,7 +9,7 @@ const fetchEmailVerification = createStep({
   id: "fetch-email-verification",
   description: "Fetches email verification data from the MailboxLayer API",
   inputSchema: z.object({
-    email: z.string().email().describe("The email address to verify"),
+    email: z.string().describe("The email address to verify"),
   }),
   outputSchema: z.object({
     email: z.string(),

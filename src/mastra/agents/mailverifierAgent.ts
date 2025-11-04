@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { Memory } from '@mastra/memory';
 import { LibSQLStore } from '@mastra/libsql';
 import { mailboxlayerTool } from '../tools/mailboxlayerTool';
+import { scorers } from '../scorers/mailverifier-scorer';
 
 export const mailverifierAgent = new Agent({
   name: 'mailverifier Agent',
@@ -13,6 +14,29 @@ export const mailverifierAgent = new Agent({
   `,
   model: 'google/gemini-2.5-flash',
   tools: {mailboxlayerTool},
+  scorers: {
+      toolCallAppropriateness: {
+        scorer: scorers.mailtoolCallAppropriatenessScorer,
+        sampling: {
+          type: 'ratio',
+          rate: 1,
+        },
+      },
+      completeness: {
+        scorer: scorers.mailcompletenessScorer,
+        sampling: {
+          type: 'ratio',
+          rate: 1,
+        },
+      },
+      translation: {
+        scorer: scorers.mailexplanationAccuracyScorer,
+        sampling: {
+          type: 'ratio',
+          rate: 1,
+        },
+      },
+    },
   memory: new Memory({
     storage: new LibSQLStore({
       url: 'file:../mastra.db',
