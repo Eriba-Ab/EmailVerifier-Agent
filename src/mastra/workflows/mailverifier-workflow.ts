@@ -126,7 +126,7 @@ and include a recommendation (e.g., "Safe to use", "Check with caution", "Invali
  * Chain the steps together: fetch → analyze → summarize.
  */
 const mailVerifierWorkflow = createWorkflow({
-  id: "mail-verifier-workflow",
+  id: "mailverifier-workflow",
   inputSchema: z.object({
     email: z.string().email(),
   }),
