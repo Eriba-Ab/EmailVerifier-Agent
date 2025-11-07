@@ -12,7 +12,6 @@ export const a2aRoute = registerApiRoute('/a2a/agent/:agentId', {
       const body = await c.req.json();
       const { jsonrpc, id: requestId, method, params } = body;
 
-      // Validate JSON-RPC 2.0 format
       if (jsonrpc !== '2.0' || !requestId) {
         return c.json({
           jsonrpc: '2.0',
@@ -24,6 +23,7 @@ export const a2aRoute = registerApiRoute('/a2a/agent/:agentId', {
         }, 400);
       }
 
+      // Retrieve the requested agent
       const agent = mastra.getAgent(agentId);
       if (!agent) {
         return c.json({
@@ -36,54 +36,55 @@ export const a2aRoute = registerApiRoute('/a2a/agent/:agentId', {
         }, 404);
       }
 
-      // Extract messages from params
+      // Extract A2A parameters
       const { message, messages, contextId, taskId, metadata } = params || {};
 
-      let messagesList = [];
-      if (message) {
-        messagesList = [message];
-      } else if (messages && Array.isArray(messages)) {
-        messagesList = messages;
-      }
+      // Normalize message list
+      const messagesList = message
+        ? [message]
+        : Array.isArray(messages)
+        ? messages
+        : [];
 
-      // Convert A2A messages to Mastra format
+      // Convert A2A messages into Mastra-compatible format
       const mastraMessages = messagesList.map((msg) => ({
         role: msg.role,
-        content: 
-            msg.parts?.map((part: { kind: string; text: any; data: any; }) => {
-            if (part.kind === 'text') return part.text;
-            if (part.kind === 'data') return JSON.stringify(part.data);
-            return '';
+        content:
+          msg.parts
+            ?.map((part: { kind: string; text?: string; data?: any }) => {
+              if (part.kind === 'text') return part.text;
+              if (part.kind === 'data') return JSON.stringify(part.data);
+              return '';
             })
             .join('\n') || ''
       }));
 
-      // Execute agent
+      // 🔹 Execute the agent and wait for full reasoning + tool results
       const response = await agent.generate(mastraMessages);
-      const agentText = response.text || '';
 
-      // Build artifacts array
+      // 🔹 Prefer final text if the agent re-responds after tool execution
+      const agentText =
+        response.finalText ||
+        response.outputText ||
+        response.text ||
+        (response.messages?.at(-1)?.content ?? '');
+
+      // 🔹 Combine agent text + tool data into a single artifact
       const artifacts: any = [
         {
           artifactId: randomUUID(),
           name: `${agentId}Response`,
-          parts: [{ kind: 'text', text: agentText }]
+          parts: [
+            { kind: 'text', text: agentText },
+            ...(response.toolResults?.map((r: any) => ({
+              kind: 'data',
+              data: r
+            })) ?? [])
+          ]
         }
       ];
 
-      // Add tool results as artifacts
-      if (response.toolResults && response.toolResults.length > 0) {
-        artifacts.push({
-          artifactId: randomUUID(),
-          name: 'ToolResults',
-          parts: response.toolResults.map((result) => ({
-            kind: 'data',
-            data: result
-          }))
-        });
-      }
-
-      // Build conversation history
+      // 🔹 Build conversation history
       const history = [
         ...messagesList.map((msg) => ({
           kind: 'message',
@@ -101,7 +102,7 @@ export const a2aRoute = registerApiRoute('/a2a/agent/:agentId', {
         }
       ];
 
-      // Return A2A-compliant response
+      // 🔹 Return full A2A-compliant response
       return c.json({
         jsonrpc: '2.0',
         id: requestId,
@@ -125,6 +126,8 @@ export const a2aRoute = registerApiRoute('/a2a/agent/:agentId', {
       });
 
     } catch (error: any) {
+      console.error('A2A Error:', error);
+
       return c.json({
         jsonrpc: '2.0',
         id: null,
